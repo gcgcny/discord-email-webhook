@@ -12,24 +12,27 @@ const router = AsyncRouter();
 app.use(express.json());
 
 router.post('/' + config['webhook_path'], async (req, res) => {
+    // truncate footer from textbody
+    const text = req.body['TextBody'].split('*Genesis Vision: *')[0];
+
+    // split body into 4000 character chunks at newlines
+    let max_iter = 10;
+    let blocks = [];
+    while (text.length > 4000 && max_iter > 0) {
+        let idx = text.lastIndexOf('\n', 4000);
+        blocks.push(text.slice(0, idx));
+        text = text.slice(idx + 1);
+        max_iter--;
+    }
+    blocks.push(text); // add the last chunk
 
     // construct webhook data
     const webhookData = {
-        content: '',
-        embeds: [{
-            title: req.body.Subject,
-            fields: [
-                {
-                    name: 'Subject', 
-                    value: req.body.Subject
-                },
-                {
-                    name: 'Message',
-                    value: req.body.TextBody
-                }
-            ]
-        }]
+        content: ''
     };
+
+    webhookData.embeds = blocks.map((block) => { return { description: block } }); // add blocks as embeds
+    webhookData.embeds[0].title = req.body.Subject; // add title to first embed
 
     // send webhook
     await axios.post(config['discord_webhook_url'], webhookData);
