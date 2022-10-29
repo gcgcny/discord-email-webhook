@@ -12,7 +12,6 @@ const router = AsyncRouter();
 app.use(express.json());
 
 router.post('/' + config['webhook_path'], async (req, res) => {
-    console.log(req.body);
 
     // construct webhook data
     const webhookData = {
@@ -31,8 +30,6 @@ router.post('/' + config['webhook_path'], async (req, res) => {
             ]
         }]
     };
-
-    console.log(webhookData);
 
     // send webhook
     await axios.post(config['discord_webhook_url'], webhookData);
