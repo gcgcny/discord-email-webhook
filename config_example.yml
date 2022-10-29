@@ -1,0 +1,4 @@
+---
+port: 9010
+webhook_path: "{randomly generate this}"
+discord_webhook_url: "https://discordapp.com/api/webhooks/{id}/{token}"
