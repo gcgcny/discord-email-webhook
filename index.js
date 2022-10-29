@@ -13,7 +13,8 @@ app.use(express.json());
 
 router.post('/' + config['webhook_path'], async (req, res) => {
     // truncate footer from textbody
-    const text = req.body['TextBody'].split('*Genesis Vision: *')[0];
+    const text = req.body['TextBody'].split('*Genesis Vision: *')[0].slice(0, -3);
+    text.replace('*', '**'); // fix bold text formatting
 
     // split body into 4000 character chunks at newlines
     let max_iter = 10;
