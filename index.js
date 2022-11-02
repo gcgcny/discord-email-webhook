@@ -33,7 +33,7 @@ router.post('/' + config['webhook_path'], async (req, res) => {
     blocks[0] = '**' + req.body.Subject + '**\n' + blocks[0];
 
     for (const cb of blocks) {
-        await axios.post(config['discord_webhook'], {
+        await axios.post(config['discord_webhook_url'], {
             "content": cb
         });
     }
