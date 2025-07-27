@@ -2,3 +2,8 @@
 port: 9010
 webhook_path: "{randomly generate this}"
 discord_webhook_url: "https://discordapp.com/api/webhooks/{id}/{token}"
+discord_webhook_url_genz: "https://discordapp.com/api/webhooks/{id}/{token}"
+fe_webhook_signature_key: null
+openai_api_key: "..."
+enable_genz_translation: true
+allowed_from_emails: ["email@email.com"]
