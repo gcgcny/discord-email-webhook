@@ -7,6 +7,7 @@ const OpenAI = require('openai');
 const crypto = require('crypto');
 
 const fs = require('node:fs');
+const { randomInt } = require('node:crypto');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -37,20 +38,20 @@ function debugLog(...args) {
 }
 
 // Middleware to capture raw body for signature verification
-app.use('/' + config['webhook_path'], express.raw({type: 'application/json'}), (req, res, next) => {
+app.use('/' + config['webhook_path'], express.raw({ type: 'application/json' }), (req, res, next) => {
     try {
         // Store raw body for signature verification
         req.rawBody = req.body;
-        
+
         // Parse JSON manually
         req.body = JSON.parse(req.body.toString());
-        
+
         // Verify webhook signature using raw body
         if (!isValidSignatureRaw(req)) {
             console.error('Invalid webhook signature');
             return res.status(403).send('Invalid webhook signature');
         }
-        
+
         next();
     } catch (error) {
         console.error('Error parsing request body or verifying signature:', error);
@@ -63,14 +64,14 @@ app.use('/' + config['webhook_path'], express.raw({type: 'application/json'}), (
 function removeEmailFooter($) {
     // Look for Gmail signature prefix span
     const signaturePrefix = $('span.gmail_signature_prefix');
-    
+
     if (signaturePrefix.length > 0) {
         // Remove this span and everything after it
         let current = signaturePrefix.first();
-        
+
         // Remove all following siblings
         current.nextAll().remove();
-        
+
         // Remove the signature prefix span itself
         current.remove();
     }
@@ -163,7 +164,8 @@ function processLineBreaks($) {
 
 // Helper function to strip unwanted HTML tags
 function stripUnwantedTags($) {
-    const allowedTags = ['p', 'br', 'b', 'i', 'a', 'table', 'tr', 'td', 'th', 'tbody', 'thead'];
+    // Include list tags so we can process them later
+    const allowedTags = ['p', 'br', 'b', 'i', 'a', 'table', 'tr', 'td', 'th', 'tbody', 'thead', 'ul', 'li', 'ol'];
     $('*').each(function () {
         if (!allowedTags.includes(this.tagName)) {
             $(this).replaceWith($(this).html());
@@ -171,11 +173,58 @@ function stripUnwantedTags($) {
     });
 }
 
+// Helper to convert <ul>/<ol>/<li> into markdown bullet/numbered lists with double newlines around the block
+function convertLists($) {
+    // Ordered lists
+    $('ol').each(function () {
+        const ol = $(this);
+        const items = [];
+        let index = 1;
+        ol.children('li').each(function () {
+            const text = $(this).text().trim().replace(/\s+/g, ' ');
+            if (text.length) {
+                items.push(`${index}. ${text}`);
+                index++;
+            }
+        });
+        if (items.length) {
+            ol.replaceWith(`\n\n${items.join('\n')}\n\n`);
+        } else {
+            ol.replaceWith('');
+        }
+    });
+
+    // Unordered lists
+    $('ul').each(function () {
+        const ul = $(this);
+        const items = [];
+        ul.children('li').each(function () {
+            const text = $(this).text().trim().replace(/\s+/g, ' ');
+            if (text.length) {
+                items.push(`- ${text}`);
+            }
+        });
+        if (items.length) {
+            ul.replaceWith(`\n\n${items.join('\n')}\n\n`);
+        } else {
+            ul.replaceWith('');
+        }
+    });
+}
+
+// Ensure spaces between adjacent HTML elements so text does not run together
+function ensureElementSpacing($) {
+    let htmlString = $.html();
+    // Add a space between closing and next opening tag when none exists (avoid introducing multiple spaces)
+    htmlString = htmlString.replace(/>(?=<)/g, '> ');
+    return cheerio.load(htmlString);
+}
+
 // Helper function to clean up text whitespace
 function cleanupText(text) {
     // Split text into code blocks and regular text
     const parts = text.split(/(```[\s\S]*?```)/);
-    
+
     return parts.map((part, index) => {
         if (part.startsWith('```') && part.endsWith('```')) {
             // This is a code block - preserve formatting
@@ -250,13 +299,13 @@ async function translateToGenZ(emailContent) {
     try {
         // Insert email content into the prompt template
         const fullPrompt = genZPrompt.replace('{{ email_body }}', emailContent);
-        
+
         debugLog('Translating content to Gen Z style...');
         const response = await openai.chat.completions.create({
             model: "gpt-4.1-mini",
             messages: [
                 {
-                    role: "system", 
+                    role: "system",
                     content: "You are a Gen Z youth translator that converts formal email content into Gen Z slang  style, lingz, and memes."
                 },
                 {
@@ -289,7 +338,7 @@ function verifyDKIM(dkimData, allowedFromEmails) {
         const envelopeFrom = dkimData.envelopeFrom;
         debugLog('Envelope from:', envelopeFrom);
         debugLog('Allowed emails:', allowedFromEmails);
-        
+
         if (!allowedFromEmails.includes(envelopeFrom)) {
             debugLog('DKIM verification failed: Envelope from not in allowed list');
             return { valid: false, reason: `Envelope from ${envelopeFrom} not in allowed list` };
@@ -303,7 +352,7 @@ function verifyDKIM(dkimData, allowedFromEmails) {
         }
 
         // Check if at least one DKIM signature passed
-        const passedSignatures = results.filter(result => 
+        const passedSignatures = results.filter(result =>
             result.status && result.status.result === 'pass'
         );
 
@@ -380,16 +429,22 @@ router.post('/' + config['webhook_path'], async (req, res) => {
         // Step 5: Convert bold/italic to Discord markdown
         convertMarkdown($);
 
+        // Step 5.5: Convert lists to markdown bullets / numbering with double newlines
+        convertLists($);
+
         // Step 6: Process paragraph and line breaks
         processLineBreaks($);
 
-        // Step 7: Extract and clean up text
+        // Step 6.5: Ensure spaces between elements before extracting text
+        $ = ensureElementSpacing($);
+
+        // Step 7: Extract and clean up text (lists already have surrounding double newlines)
         let processedText = $.text();
         processedText = cleanupText(processedText);
 
         // Step 8: Add subject to processed text
-        if (req.body.Subject) {
-            processedText = `**${req.body.Subject}**\n\n${processedText}`;
+        if (req.body.subject) {
+            processedText = `**${req.body.subject}**\n\n${processedText}`;
         }
 
         // Step 9: Split original content into Discord-sized blocks
@@ -400,7 +455,7 @@ router.post('/' + config['webhook_path'], async (req, res) => {
         for (const block of blocks) {
             if (block.trim().length > 0) {
                 if (!DEBUG_MODE) {
-  
+
                     await axios.post(config['discord_webhook_url'], {
                         "content": block
                     });
@@ -409,19 +464,29 @@ router.post('/' + config['webhook_path'], async (req, res) => {
             }
         }
 
+        const DISCLAIMERS = [
+            "lowkey, chatty ain't always 100% accurate 👀. peep the receipts (dates, times, places) in #emails just in case.",
+            "ngl, chatty can slip up sometimes. fact check deets like dates, times, and locations in the boomer chat #emails",
+            "chatty's got the vibes 😎, but always double-check the deets in #emails just to be sure 💪.",
+            "not gonna lie, chatty might fumble the bag sometimes 💀. fact check the big deets in #emails like dates n locations.",
+            "tbh, chatty be 95% valid but still slip here n there 😬. cross-check the info (dates, times, places) in #emails.",
+            "chatty's solid but can still tweak a bit 🙊. verify dates, times, n spots over in the boomer chat: #emails",
+            "chatty usually slaps, but sometimes it sus 😮‍💨 peep the receipts (dates/times/locs) in #emails"
+        ];
+
         // Step 11: Translate to Gen Z style and send to separate webhook (if enabled)
         if (config['enable_genz_translation'] && config['discord_webhook_url_genz']) {
             debugLog('Translating to Gen Z style...');
             const genZTranslation = await translateToGenZ(processedText);
-            const genZcontent = genZTranslation + `\n\n---\nngl, chatty can slip up sometimes. fact check deets like dates, times, and locations in the boomer chat. #emails`;
-            
+            const genZcontent = genZTranslation + `\n\n---\n` + DISCLAIMERS[randomInt(DISCLAIMERS.length)];
+
             // Add Gen Z prefix and split into blocks
             const genZBlocks = splitText(genZcontent, MSG_CHAR_LIMIT);
 
             debugLog('Sending Gen Z version...');
             for (const block of genZBlocks) {
                 if (block.trim().length > 0) {
-                        if (!DEBUG_MODE) {
+                    if (!DEBUG_MODE) {
                         await axios.post(config['discord_webhook_url_genz'], {
                             "content": block
                         });
