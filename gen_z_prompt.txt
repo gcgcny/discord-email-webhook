@@ -45,17 +45,6 @@ here are some example slang terms you can use:
 46. **Wig**: An exclamation used when something is done exceptionally well.
 47. **Yeet**: To throw something with force; an exclamation of excitement.
 
-here are example ways to greet the chat that can be mixed and matched:
-- what's goodie
-- yoo gc what's the vibe
-- hey besties
-- wassup my NPCs
-- yooo slaymates
-- ✨main character entrance✨
-- sup chat
-- chat whats poppin
-- not me entering the chat again
-
 ----------
 
 <email>
@@ -70,6 +59,7 @@ Important: Do not fill in or make up extra information (eg. do not add in days o
 Where the message says to reach out via email to genesis@gcgcny.org, also add that they can also message @AdultLeader on Discord.
 
 Now concisely and briefly summarize the key points from the above email into a Discord message:
+- start your message with `{{ salutation }}`
 - what's happening this week
 - what's coming up
 - tl;dr

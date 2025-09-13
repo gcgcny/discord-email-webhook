@@ -27,8 +27,30 @@ const genZPrompt = fs.readFileSync('gen_z_prompt.txt', 'utf8');
 const app = express();
 const router = AsyncRouter();
 
-const MAX_ITER = 10;
 const MSG_CHAR_LIMIT = 1800;
+
+const DISCLAIMERS = [
+    "lowkey, chatty ain't always 100% accurate 👀. peep the receipts (dates, times, places) in #emails just in case.",
+    "ngl, chatty can slip up sometimes. fact check deets like dates, times, and locations in the boomer chat #emails",
+    "chatty's got the vibes 😎, but always double-check the deets in #emails just to be sure 💪.",
+    "not gonna lie, chatty might fumble the bag sometimes 💀. fact check the big deets in #emails like dates n locations.",
+    "tbh, chatty be 95% valid but still slip here n there 😬. cross-check the info (dates, times, places) in #emails.",
+    "chatty's solid but can still tweak a bit 🙊. verify dates, times, n spots over in the boomer chat: #emails",
+    "chatty usually slaps, but sometimes it sus 😮‍💨 peep the receipts (dates/times/locs) in #emails"
+];
+
+const GREETINGS = [
+    "what's goodie",
+    "yoo gc what's the vibe",
+    "heyyy besties",
+    "wassup my NPCs",
+    "yooo slaymates",
+    "✨main character entrance✨",
+    "sup chat",
+    "chat whats poppin",
+    "not me entering the chat again",
+    "okayyy chat",
+];
 
 // Debug logging helper
 function debugLog(...args) {
@@ -298,30 +320,36 @@ function splitText(text, maxLength) {
 async function translateToGenZ(emailContent) {
     try {
         // Insert email content into the prompt template
-        const fullPrompt = genZPrompt.replace('{{ email_body }}', emailContent);
+        const fullPrompt = genZPrompt
+            .replace('{{ email_body }}', emailContent)
+            .replace('{{ salutation }}', GREETINGS[randomInt(GREETINGS.length)]);
 
         debugLog('Translating content to Gen Z style...');
-        const response = await openai.chat.completions.create({
-            model: "gpt-4.1-mini",
-            messages: [
+        const response = await openai.responses.create({
+            model: "gpt-5-mini",
+            input: [
                 {
                     role: "system",
-                    content: "You are a Gen Z youth translator that converts formal email content into Gen Z slang  style, lingz, and memes."
+                    content: "You are a Gen Z youth translator that converts formal email content into Gen Z slang style, lingz, and memes."
                 },
                 {
                     role: "user",
                     content: fullPrompt
                 }
             ],
-            max_tokens: 5000,
-            temperature: 0.5
+            max_output_tokens: 5000,
+            reasoning: {
+                effort: "low",
+            }
+            // max_tokens: 5000,
+            // temperature: 0.75
         });
 
         debugLog('Gen Z translation completed');
-        return response.choices[0].message.content;
+        return response.output_text;
     } catch (error) {
         console.error('Error translating to Gen Z:', error);
-        return emailContent; // Return original content if translation fails
+        return undefined;
     }
 }
 
@@ -463,16 +491,6 @@ router.post('/' + config['webhook_path'], async (req, res) => {
                 debugLog('Sent original block to Discord:', block);
             }
         }
-
-        const DISCLAIMERS = [
-            "lowkey, chatty ain't always 100% accurate 👀. peep the receipts (dates, times, places) in #emails just in case.",
-            "ngl, chatty can slip up sometimes. fact check deets like dates, times, and locations in the boomer chat #emails",
-            "chatty's got the vibes 😎, but always double-check the deets in #emails just to be sure 💪.",
-            "not gonna lie, chatty might fumble the bag sometimes 💀. fact check the big deets in #emails like dates n locations.",
-            "tbh, chatty be 95% valid but still slip here n there 😬. cross-check the info (dates, times, places) in #emails.",
-            "chatty's solid but can still tweak a bit 🙊. verify dates, times, n spots over in the boomer chat: #emails",
-            "chatty usually slaps, but sometimes it sus 😮‍💨 peep the receipts (dates/times/locs) in #emails"
-        ];
 
         // Step 11: Translate to Gen Z style and send to separate webhook (if enabled)
         if (config['enable_genz_translation'] && config['discord_webhook_url_genz']) {
