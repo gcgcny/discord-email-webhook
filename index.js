@@ -197,41 +197,69 @@ function stripUnwantedTags($) {
 
 // Helper to convert <ul>/<ol>/<li> into markdown bullet/numbered lists with double newlines around the block
 function convertLists($) {
-    // Ordered lists
-    $('ol').each(function () {
-        const ol = $(this);
-        const items = [];
-        let index = 1;
-        ol.children('li').each(function () {
-            const text = $(this).text().trim().replace(/\s+/g, ' ');
-            if (text.length) {
-                items.push(`${index}. ${text}`);
-                index++;
-            }
-        });
-        if (items.length) {
-            ol.replaceWith(`\n\n${items.join('\n')}\n\n`);
-        } else {
-            ol.replaceWith('');
-        }
-    });
+    function normalizeWhitespace(text) {
+        return String(text || '').replace(/\s+/g, ' ').trim();
+    }
 
-    // Unordered lists
-    $('ul').each(function () {
-        const ul = $(this);
-        const items = [];
-        ul.children('li').each(function () {
-            const text = $(this).text().trim().replace(/\s+/g, ' ');
-            if (text.length) {
-                items.push(`- ${text}`);
+    function getLiOwnText(li) {
+        const clone = li.clone();
+        clone.children('ul, ol').remove();
+        return normalizeWhitespace(clone.text());
+    }
+
+    function serializeList(listEl, indentLevel) {
+        const list = $(listEl);
+        const isOrdered = (listEl.tagName || '').toLowerCase() === 'ol';
+        const indent = '  '.repeat(Math.max(0, indentLevel));
+        const lines = [];
+
+        let orderedIndex = 1;
+
+        // Use contents() instead of children() to be resilient to malformed markup like <ul><ul>...</ul></ul>
+        const nodes = list.contents().toArray();
+        for (const node of nodes) {
+            if (!node || node.type !== 'tag') continue;
+            const tag = (node.tagName || '').toLowerCase();
+
+            if (tag === 'li') {
+                const li = $(node);
+                const ownText = getLiOwnText(li);
+
+                if (ownText) {
+                    const prefix = isOrdered ? `${orderedIndex}. ` : '- ';
+                    lines.push(`${indent}${prefix}${ownText}`);
+                }
+
+                // Include nested lists under this list item
+                li.children('ul, ol').each(function () {
+                    const nestedLines = serializeList(this, indentLevel + 1);
+                    if (nestedLines.length) lines.push(...nestedLines);
+                });
+
+                if (isOrdered) orderedIndex++;
+            } else if (tag === 'ul' || tag === 'ol') {
+                // Handle malformed nesting: a list directly inside a list without an <li>
+                const nestedLines = serializeList(node, indentLevel + 1);
+                if (nestedLines.length) lines.push(...nestedLines);
+            }
+        }
+
+        return lines;
+    }
+
+    // Only convert top-level lists; nested lists are handled recursively.
+    $('ul, ol')
+        .filter(function () {
+            return $(this).parents('ul, ol').length === 0;
+        })
+        .each(function () {
+            const lines = serializeList(this, 0);
+            if (lines.length) {
+                $(this).replaceWith(`\n\n${lines.join('\n')}\n\n`);
+            } else {
+                $(this).replaceWith('');
             }
         });
-        if (items.length) {
-            ul.replaceWith(`\n\n${items.join('\n')}\n\n`);
-        } else {
-            ul.replaceWith('');
-        }
-    });
 }
 
 // Ensure spaces between adjacent HTML elements so text does not run together
@@ -252,11 +280,27 @@ function cleanupText(text) {
             // This is a code block - preserve formatting
             return "\n\n" + part + "\n\n";
         } else {
-            // This is regular text - clean up whitespace
-            return part
-                .replace(/\n\s*\n\s*\n/g, '\n\n') // Replace multiple newlines with double newlines
-                .replace(/^\s+|\s+$/g, '') // Trim start and end
-                .replace(/[ \t]+/g, ' '); // Replace multiple spaces/tabs with single space
+            // This is regular text - clean up whitespace, but preserve indentation for nested list lines.
+            let cleaned = part.replace(/\r\n/g, '\n');
+            cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+            cleaned = cleaned.trim();
+
+            const lines = cleaned.split('\n').map((line) => {
+                const match = line.match(/^(\s*)(.*)$/);
+                const leading = (match && match[1]) ? match[1] : '';
+                let content = (match && match[2]) ? match[2] : '';
+
+                const isListLine = /^(?:[-*]|\d+\.)\s+/.test(content);
+                if (isListLine) {
+                    content = content.replace(/[ \t]+/g, ' ').trimEnd();
+                    return leading + content;
+                }
+
+                content = content.replace(/[ \t]+/g, ' ').trim();
+                return content;
+            });
+
+            return lines.join('\n');
         }
     }).join('');
 }
