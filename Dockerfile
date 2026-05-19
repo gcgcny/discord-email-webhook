@@ -13,6 +13,6 @@ COPY index.js gen_z_prompt.txt ./
 RUN chown -R node:node /app
 USER node
 
-EXPOSE 9010
+EXPOSE 5401
 
 CMD ["node", "index.js"]

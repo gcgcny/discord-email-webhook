@@ -562,8 +562,9 @@ router.post('/' + config['webhook_path'], async (req, res) => {
 
 app.use('/', router); // use router for all requests
 
-app.listen(config['port'], () => {
-    console.log('Listening on port ' + config['port']);
+const PORT = Number(process.env.WEBHOOK_PORT) || 5401;
+app.listen(PORT, () => {
+    console.log('Listening on port ' + PORT);
     if (DEBUG_MODE) {
         console.log('[DEBUG MODE ENABLED] - Console logging enabled, Discord webhooks disabled');
         console.log('To disable debug mode, run without --debug or -d flags');

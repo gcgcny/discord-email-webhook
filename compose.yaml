@@ -6,9 +6,9 @@ services:
     restart: unless-stopped
     init: true
     environment:
-      WEBHOOK_PORT: "${WEBHOOK_PORT:-9010}"
+      WEBHOOK_PORT: "${WEBHOOK_PORT:-5401}"
     ports:
-      - "${WEBHOOK_PORT:-9010}:${WEBHOOK_PORT:-9010}"
+      - "${WEBHOOK_PORT:-5401}:${WEBHOOK_PORT:-5401}"
     volumes:
       - ./config.yml:/app/config.yml:ro
     healthcheck:
@@ -17,7 +17,7 @@ services:
           "CMD",
           "node",
           "-e",
-          "const net=require('net');const port=Number(process.env.WEBHOOK_PORT||9010);const s=net.createConnection({host:'127.0.0.1',port},()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000);"
+          "const net=require('net');const port=Number(process.env.WEBHOOK_PORT||5401);const s=net.createConnection({host:'127.0.0.1',port},()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000);"
         ]
       interval: 30s
       timeout: 3s
