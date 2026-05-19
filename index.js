@@ -3,7 +3,7 @@ const AsyncRouter = require("express-async-router").AsyncRouter;
 const axios = require('axios');
 const yaml = require('yaml');
 const cheerio = require('cheerio');
-const OpenAI = require('openai');
+const Anthropic = require('@anthropic-ai/sdk').default;
 const crypto = require('crypto');
 
 const fs = require('node:fs');
@@ -16,9 +16,9 @@ const SAVE_BODY = args.includes('--save-body') || args.includes('-s');
 
 const config = yaml.parse(fs.readFileSync('config.yml', 'utf8'));
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-    apiKey: config['openai_api_key'] // Add this to your config.yml
+// Initialize Anthropic client
+const anthropic = new Anthropic({
+    apiKey: config['anthropic_api_key']
 });
 
 // Load Gen Z prompt
@@ -360,7 +360,7 @@ function splitText(text, maxLength) {
     return blocks.length > 0 ? blocks : [''];
 }
 
-// Helper function to translate email content to Gen Z style using OpenAI
+// Helper function to translate email content to Gen Z style using Anthropic Claude
 async function translateToGenZ(emailContent) {
     try {
         // Insert email content into the prompt template
@@ -369,28 +369,21 @@ async function translateToGenZ(emailContent) {
             .replace('{{ salutation }}', GREETINGS[randomInt(GREETINGS.length)]);
 
         debugLog('Translating content to Gen Z style...');
-        const response = await openai.responses.create({
-            model: "gpt-5-mini",
-            input: [
-                {
-                    role: "system",
-                    content: "You are a Gen Z youth translator that converts formal email content into Gen Z slang style, lingz, and memes."
-                },
+        debugLog('Calling Anthropic API with model claude-sonnet-4-6, apiKey prefix:', config['anthropic_api_key']?.substring(0, 16) + '...');
+        const response = await anthropic.messages.create({
+            model: "claude-sonnet-4-6",
+            max_tokens: 5000,
+            system: "You are a Gen Z youth translator that converts formal email content into Gen Z slang style, lingz, and memes.",
+            messages: [
                 {
                     role: "user",
                     content: fullPrompt
                 }
-            ],
-            max_output_tokens: 5000,
-            reasoning: {
-                effort: "low",
-            }
-            // max_tokens: 5000,
-            // temperature: 0.75
-        });
+            ]
+        }, { timeout: 60_000 });
 
-        debugLog('Gen Z translation completed');
-        return response.output_text;
+        debugLog('Anthropic API responded, stop_reason:', response.stop_reason, ', content blocks:', response.content.length);
+        return response.content[0].text;
     } catch (error) {
         console.error('Error translating to Gen Z:', error);
         return undefined;
@@ -537,9 +530,11 @@ router.post('/' + config['webhook_path'], async (req, res) => {
         }
 
         // Step 11: Translate to Gen Z style and send to separate webhook (if enabled)
+        debugLog('Checking Gen Z translation config: enable_genz_translation =', config['enable_genz_translation'], ', genz_url set =', !!config['discord_webhook_url_genz']);
         if (config['enable_genz_translation'] && config['discord_webhook_url_genz']) {
-            debugLog('Translating to Gen Z style...');
+            debugLog('Entering Gen Z translation block...');
             const genZTranslation = await translateToGenZ(processedText);
+            debugLog('translateToGenZ returned:', genZTranslation ? 'text received' : 'undefined/null');
             const genZcontent = genZTranslation + `\n\n---\n` + DISCLAIMERS[randomInt(DISCLAIMERS.length)];
 
             // Add Gen Z prefix and split into blocks
