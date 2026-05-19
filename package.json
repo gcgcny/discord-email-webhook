@@ -2,6 +2,7 @@
   "name": "discord-email-webhook",
   "version": "1.0.0",
   "main": "index.js",
+  "packageManager": "pnpm@10.27.0",
   "author": "Simeon Wong <dtxe@users.noreply.github.com>",
   "license": "MIT",
   "scripts": {

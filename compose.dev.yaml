@@ -1,0 +1,9 @@
+services:
+  discord-email-webhook:
+    environment:
+      NODE_ENV: development
+    command: ["node", "index.js", "--debug"]
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./config.yml:/app/config.yml:ro

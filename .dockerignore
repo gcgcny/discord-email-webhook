@@ -1,0 +1,17 @@
+.git
+.gitignore
+.dockerignore
+Dockerfile
+compose*.yaml
+node_modules
+logs
+*.log
+.env
+.env.*
+config.yml
+request_*.json
+coverage
+.nyc_output
+.cache
+dist
+out

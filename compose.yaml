@@ -1,0 +1,25 @@
+services:
+  discord-email-webhook:
+    build:
+      context: .
+    image: discord-email-webhook:local
+    restart: unless-stopped
+    init: true
+    environment:
+      WEBHOOK_PORT: "${WEBHOOK_PORT:-9010}"
+    ports:
+      - "${WEBHOOK_PORT:-9010}:${WEBHOOK_PORT:-9010}"
+    volumes:
+      - ./config.yml:/app/config.yml:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const net=require('net');const port=Number(process.env.WEBHOOK_PORT||9010);const s=net.createConnection({host:'127.0.0.1',port},()=>process.exit(0));s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),2000);"
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
